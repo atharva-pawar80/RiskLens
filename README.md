@@ -43,6 +43,8 @@ Docker Container  ──▶  packaged with all dependencies, runs identically an
 
 **Note on accuracy:** all models score 99%+ accuracy — this is misleading with 0.17% fraud rate. A model predicting "never fraud" would also score ~99.8% while catching zero fraud. Precision/recall on the fraud class are the metrics that actually matter here.
 
+![Python CI](https://github.com/atharva-pawar80/fraud-detection/actions/workflows/python-app.yml/badge.svg)
+
 ## Tech Stack
 
 - **Data & modeling:** pandas, scikit-learn
