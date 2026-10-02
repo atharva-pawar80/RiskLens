@@ -84,7 +84,14 @@ python -m uvicorn app:app --reload
 
 Either way, once running, open **`http://127.0.0.1:8000/docs`** for the interactive API docs.
 
+### Health checks
+
+- `GET /health` reports that the API process is running.
+- `GET /ready` reports whether the model is loaded; it returns HTTP 503 if the model is unavailable.
+
 ### Example request
+
+`V_features` must contain exactly 28 finite numeric values. `Time`, `Amount`, and each feature must also be finite numbers. Invalid requests return HTTP 422.
 
 ```json
 POST /predict

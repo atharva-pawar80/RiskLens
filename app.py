@@ -1,38 +1,70 @@
 from fastapi import FastAPI
-from pydantic import BaseModel
+from fastapi.responses import HTMLResponse, JSONResponse
+from pydantic import BaseModel, validator
 import joblib
-from fastapi.responses import HTMLResponse
-import json
-from datetime import datetime
+import logging
+import math
+from pathlib import Path
 
 
-model = joblib.load('fraud_detection.pkl')
+logger = logging.getLogger(__name__)
+
+try:
+    model = joblib.load(Path(__file__).with_name("fraud_detection.pkl"))
+except Exception:
+    logger.exception("Unable to load fraud detection model")
+    model = None
 
 
 app = FastAPI()
 
 
 class Transaction(BaseModel):
+    Time: float
+    V_features: list[float]
+    Amount: float
 
-    Time : float
-    V_features : list[float]
-    Amount : float
+    @validator("Time", "Amount")
+    def validate_finite_number(cls, value: float) -> float:
+        if not math.isfinite(value):
+            raise ValueError("value must be finite")
+        return value
+
+    @validator("V_features")
+    def validate_v_features(cls, values: list[float]) -> list[float]:
+        if len(values) != 28:
+            raise ValueError("V_features must contain exactly 28 values")
+        if not all(math.isfinite(value) for value in values):
+            raise ValueError("V_features values must be finite")
+        return values
+
+
+@app.get("/health")
+def health():
+    return {"status": "ok"}
+
+
+@app.get("/ready")
+def ready():
+    if model is None or not callable(getattr(model, "predict", None)):
+        return JSONResponse(
+            status_code=503,
+            content={"status": "not_ready", "detail": "Model is unavailable"},
+        )
+    return {"status": "ready"}
 
 
 @app.post("/predict")
 def predict(transaction: Transaction):
+    if model is None or not callable(getattr(model, "predict", None)):
+        return JSONResponse(
+            status_code=503,
+            content={"detail": "Model is unavailable"},
+        )
+
     row = [transaction.Time] + transaction.V_features + [transaction.Amount]
     prediction = model.predict([row])[0]
     result = bool(prediction)
-
-    
-    log_entry = {
-        "timestamp": str(datetime.now()),
-        "input": row,
-        "prediction": result
-    }
-    with open("predictions.log", "a") as f:
-        f.write(json.dumps(log_entry) + "\n")
 
     return {"is_fraud": result}
 
@@ -419,11 +451,18 @@ async function submitTransaction() {
       body: JSON.stringify(data)
     });
     result = await res.json();
+    if (!res.ok) {
+      const detail = result.detail;
+      const message = Array.isArray(detail)
+        ? detail.map(item => item.msg).join('; ')
+        : detail || 'Prediction request failed.';
+      throw new Error(message);
+    }
   } catch (err) {
     scanTrack.classList.remove('active');
     scanStatus.style.display = 'none';
     emptyState.style.display = 'flex';
-    emptyState.innerText = 'Error contacting model: ' + err;
+    emptyState.innerText = 'Prediction failed: ' + err.message;
     return;
   }
 
